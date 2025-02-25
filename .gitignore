@@ -1,0 +1,52 @@
+# Binaries and executables
+/bookapi
+/bookapi.exe
+
+# Dependency modules (for Go modules)
+vendor/
+go.sum
+go.work
+go.work.sum
+
+# Temporary build files
+*.out
+*.exe
+*.dll
+*.dylib
+*.so
+*.a
+
+# Logs and debug files
+*.log
+*.test
+*.prof
+*.tmp
+debug/
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Go build cache
+/bin/
+/pkg/
+/obj/
+.cache/
+.coverage/
+
+# Docker-related files
+docker-compose.override.yml
+.dockerignore
+
+# Ignore environment files (secrets)
+.env
+.env.local
+.env.production
+.env.development
+
+# Ignore database files (if using SQLite or local DB)
+*.db
+*.sqlite
+*.sqlite3

@@ -1,0 +1,79 @@
+version: '3.8'
+
+# Service Definitions
+services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:${DB_DOCKER_PORT}"  # Host:Container port mapping
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Persistent data storage
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped  # Automatically restart container unless manually stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G  # Limit memory usage to 1 gigabyte
+
+  # pgAdmin Service - Database Management Interface
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "${PGADMIN_PORT}:80"  # Map host port to container port 80
+    depends_on:
+      - db  # Ensure database service starts first
+    restart: unless-stopped
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin  # Persistent pgAdmin data
+    deploy:
+      resources:
+        limits:
+          memory: 512M  # Limit memory usage to 512 megabytes
+
+  # Main Application Service
+  app:
+    depends_on:
+      - db  # Ensure database service starts first
+    build: .  # Build using Dockerfile in current directory
+    restart: unless-stopped
+    env_file: ./.env  # Load environment variables from .env file
+    ports:
+      - "${DB_HOST}:${APP_DOCKER_PORT}:${APP_PORT}"
+    environment:
+      # Database connection configuration
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_PORT: ${DB_DOCKER_PORT}
+    stdin_open: true  # Keep STDIN open for container
+    tty: true  # Allocate a pseudo-TTY
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${APP_DOCKER_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G  # Limit memory usage to 1 gigabyte
+          cpus: '1'   # Limit CPU usage to 1 core
+
+# Named Volumes Configuration
+volumes:
+  postgres_data:  # Persistent volume for PostgreSQL data
+    driver: local
+  pgadmin_data:  # Persistent volume for pgAdmin data
+    driver: local
