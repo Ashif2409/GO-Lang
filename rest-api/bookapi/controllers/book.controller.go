@@ -3,97 +3,129 @@ package controllers
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
+	"example.com1/database"
 	models "example.com1/model"
 	"github.com/gorilla/mux"
 )
 
-var books []models.Book
-
-func init() {
-	// Sample data
-	books = append(books, models.Book{
-		ID:   "1",
-		Isbn: "2345678",
-		Name: "Book one",
-		Author: &models.Author{
-			FirstName: "John",
-			LastName:  "Smith",
-		},
-	})
-	books = append(books, models.Book{
-		ID:   "2",
-		Isbn: "0987654",
-		Name: "Book two",
-		Author: &models.Author{
-			FirstName: "Steve",
-			LastName:  "Smith",
-		},
-	})
-}
-
 func GetBooks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	var books []models.Book
+	if err := database.DB.Preload("Author").Find(&books).Error; err != nil {
+		http.Error(w, "Failed to fetch books", http.StatusInternalServerError)
+		return
+	}
+
 	json.NewEncoder(w).Encode(books)
 }
+
 func GetBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	vars := mux.Vars(r)
 	id := vars["id"]
-	for _, book := range books {
-		if book.ID == id {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(book)
-			return
-		}
+	var book models.Book
+	if err := database.DB.Preload("Author").First(&book, id).Error; err != nil {
+		http.Error(w, "Book not found", http.StatusNotFound)
+		return
 	}
-	http.Error(w, "Book not found", http.StatusNotFound)
+
+	json.NewEncoder(w).Encode(book)
 }
+
 func CreateBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var book models.Book
-	err := json.NewDecoder(r.Body).Decode(&book)
-	if err != nil {
-		http.Error(w, "Invalid request Body ", http.StatusBadRequest)
+
+	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-	book.ID = strconv.Itoa(len(books) + 1)
-	books = append(books, book)
+
+	// Check if the author exists
+	var author models.Author
+	if err := database.DB.Where("first_name = ? AND last_name = ?", book.Author.FirstName, book.Author.LastName).First(&author).Error; err != nil {
+		// If author not found, create a new one
+		author = models.Author{
+			FirstName: book.Author.FirstName,
+			LastName:  book.Author.LastName,
+		}
+		if err := database.DB.Create(&author).Error; err != nil {
+			http.Error(w, "Failed to create author", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Assign the AuthorID to the Book and save it
+	book.AuthorID = author.ID
+	if err := database.DB.Create(&book).Error; err != nil {
+		http.Error(w, "Failed to create book", http.StatusInternalServerError)
+		return
+	}
+
 	json.NewEncoder(w).Encode(book)
 }
+
 func DeleteBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	vars := mux.Vars(r)
 	id := vars["id"]
-	for index, book := range books {
-		if book.ID == id {
-			books = append(books[:index], books[index+1:]...)
-			json.NewEncoder(w).Encode(books)
-			return
-		}
+
+	var book models.Book
+	if err := database.DB.First(&book, id).Error; err != nil {
+		http.Error(w, "Book not found", http.StatusNotFound)
+		return
 	}
-	http.Error(w, "Book not found", http.StatusNotFound)
+
+	if err := database.DB.Delete(&book).Error; err != nil {
+		http.Error(w, "Failed to delete book", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Book deleted successfully"})
 }
+
 func UpdateBook(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	vars := mux.Vars(r)
 	id := vars["id"]
-	for index, book := range books {
-		if book.ID == id {
-			books = append(books[:index], books[index+1:]...)
-			json.NewEncoder(w).Encode(books)
-			var updatedBook models.Book
-			err := json.NewDecoder(r.Body).Decode(&updatedBook)
-			if err != nil {
-				http.Error(w, "Invalid request Body ", http.StatusBadRequest)
-				return
-			}
-			updatedBook.ID = id
-			books = append(books, updatedBook)
-			json.NewEncoder(w).Encode(updatedBook)
+
+	var book models.Book
+	if err := database.DB.First(&book, id).Error; err != nil {
+		http.Error(w, "Book not found", http.StatusNotFound)
+		return
+	}
+
+	var newBook models.Book
+	if err := json.NewDecoder(r.Body).Decode(&newBook); err != nil {
+		http.Error(w, "Failed to decode request body", http.StatusBadRequest)
+		return
+	}
+
+	// Ensure new author exists before proceeding
+	if newBook.AuthorID != 0 {
+		var author models.Author
+		if err := database.DB.First(&author, newBook.AuthorID).Error; err != nil {
+			http.Error(w, "New Author not found", http.StatusBadRequest)
 			return
 		}
 	}
-	http.Error(w, "Book not found", http.StatusNotFound)
+
+	// Delete the existing book
+	if err := database.DB.Delete(&book).Error; err != nil {
+		http.Error(w, "Failed to delete old book", http.StatusInternalServerError)
+		return
+	}
+
+	// Assign the same ID to the new book
+	newBook.ID = book.ID
+
+	// Recreate the book with the same ID
+	if err := database.DB.Create(&newBook).Error; err != nil {
+		http.Error(w, "Failed to recreate book", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(newBook)
 }
