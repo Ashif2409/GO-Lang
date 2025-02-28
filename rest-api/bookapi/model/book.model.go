@@ -3,11 +3,12 @@ package models
 // import "gorm.io/gorm"
 
 type Book struct {
-	ID       uint   `json:"id" gorm:"primaryKey"`
-	Isbn     string `json:"isbn"`
-	Name     string `json:"name"`
-	AuthorID uint   `json:"author_id"`
-	Author   Author `json:"author" gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	ID       uint    `json:"id" gorm:"primaryKey"`
+	Isbn     string  `json:"isbn"`
+	Name     string  `json:"name"`
+	AuthorID uint    `json:"author_id"`
+	Author   Author  `json:"author" gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;"`
+	Price    float64 `json:"price"`
 }
 
 type Author struct {

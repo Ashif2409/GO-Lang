@@ -29,7 +29,7 @@ func ConnectDB() {
 	}
 
 	// Auto-migrate models
-	db.AutoMigrate(&models.Book{}) // Add your models here
+	db.AutoMigrate(&models.Book{})
 
 	DB = db
 	log.Println("Connected to database successfully")
